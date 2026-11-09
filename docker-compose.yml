@@ -14,11 +14,17 @@ services:
       - DJANGO_SETTINGS_MODULE=config.settings
       - SECRET_KEY=t49MYWOvZbYTeuuqctyLOnFRUTpF-7FNWnGM-K-r5O01rwslxS27FA2fMZivspOsKo8
       - DEBUG=False
-      # Add the server's public domain/IP here, or requests return 400.
-      - ALLOWED_HOSTS=localhost,127.0.0.1,ntkm-website.vercel.app
+      # Hostnames Django accepts. Requests for any other Host header return 400.
+      - ALLOWED_HOSTS=ntkm-backend.aran8276.my.id,localhost,127.0.0.1
+      - CSRF_TRUSTED_ORIGINS=https://ntkm-backend.aran8276.my.id
+      - PUBLIC_BASE_URL=https://ntkm-backend.aran8276.my.id
       - FRONTEND_ORIGIN=https://ntkm-website.vercel.app
       - FRONTEND_URL=https://ntkm-website.vercel.app
       - SERVE_MEDIA=True
+      # Prototype only: /api/v1/auth/dev-login logs in as ANY email (admins too)
+      # without a password. Set both to False before real users or data arrive.
+      - AUTH_DEV_LOGIN=True
+      - AUTH_DEV_LOGIN_ALLOW_PRODUCTION=True
     ports:
       - "20002:8000"
     restart: unless-stopped

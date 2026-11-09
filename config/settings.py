@@ -118,7 +118,9 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_BYTES + 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_BYTES + 1024 * 1024
 
 CORS_ALLOWED_ORIGINS = env_list("FRONTEND_ORIGIN", "http://localhost:3000")
-CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+# Backend's own public origin(s) (e.g. https://api.example.com) are needed for Django admin
+# logins over HTTPS behind a proxy, in addition to the frontend origins.
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS + env_list("CSRF_TRUSTED_ORIGINS")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("core.authentication.PlatformJWTAuthentication",),
@@ -161,9 +163,15 @@ SPECTACULAR_SETTINGS = {
 }
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-# Local-only shortcut: POST /auth/dev-login {"email": "..."} issues tokens without
-# Google. Ignored unless DEBUG is also on. Never enable in production.
-AUTH_DEV_LOGIN = DEBUG and env_bool("AUTH_DEV_LOGIN", False)
+# Shortcut: POST /auth/dev-login {"email": "..."} issues tokens for ANY email (admins
+# included) without Google. Needs DEBUG, or the explicit AUTH_DEV_LOGIN_ALLOW_PRODUCTION
+# opt-in for prototypes. Anyone who can reach the URL can log in as any account.
+AUTH_DEV_LOGIN_ALLOW_PRODUCTION = env_bool("AUTH_DEV_LOGIN_ALLOW_PRODUCTION", False)
+AUTH_DEV_LOGIN = env_bool("AUTH_DEV_LOGIN", False) and (DEBUG or AUTH_DEV_LOGIN_ALLOW_PRODUCTION)
+if AUTH_DEV_LOGIN and not DEBUG:
+    import sys
+
+    print("WARNING: /auth/dev-login is enabled with DEBUG=False (no-password login).", file=sys.stderr)
 
 # Email notifications (console backend by default; set SMTP settings in production).
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")

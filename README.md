@@ -30,7 +30,7 @@ Dengan `DEBUG=False`, server menolak start bila `SECRET_KEY` belum diganti.
 | `POST /auth/google` `{id_token}` | Memverifikasi ID token Google → `{access, refresh, is_new_user, user}`. Akun undangan menjadi aktif saat login pertama. Akun disuspend → 403 `account_suspended`; akun dihapus → 403 |
 | `POST /auth/token/refresh` `{refresh}` | Token baru (refresh diputar, yang lama di-blacklist). Akun disuspend/dihapus ditolak |
 | `POST /auth/logout` `{refresh}` | Blacklist refresh token → 204 |
-| `POST /auth/dev-login` `{email, name?}` | Hanya lokal (`DEBUG=True` dan `AUTH_DEV_LOGIN=True`): login tanpa Google untuk mencoba API |
+| `POST /auth/dev-login` `{email, name?}` | Login tanpa Google untuk mencoba API. Aktif bila `AUTH_DEV_LOGIN=True` dan (`DEBUG=True` atau `AUTH_DEV_LOGIN_ALLOW_PRODUCTION=True`). Siapa pun bisa masuk sebagai akun apa pun, jadi jangan aktifkan di produksi sungguhan |
 
 Kirim `Authorization: Bearer <access>` untuk endpoint lain. Setiap request mengecek ulang status akun, jadi suspend berlaku seketika (sesi refresh juga dicabut).
 
