@@ -20,7 +20,7 @@ services:
       - FRONTEND_URL=https://ntkm-website.vercel.app
       - SERVE_MEDIA=True
     ports:
-      - "20001:8000"
+      - "20002:8000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/django-admin/login/')"]
