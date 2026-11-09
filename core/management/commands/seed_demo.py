@@ -1,12 +1,20 @@
 """
-python manage.py seed_demo [--reset]
+python manage.py seed_demo [--users-only] [--reset [--yes]]
 
-Creates demo data matching the frontend mocks: categories, a superadmin and a
+Default: demo data matching the frontend mocks: categories, a superadmin and a
 staff admin, 4 stores, 5 UMKMs, products, opportunities and applications in
 every status (driven through the real workflow so timelines, quota and
 notifications are consistent).
+
+--users-only: categories plus a few generic accounts (admin, staff, a store
+user, an UMKM user and a user without a role). No profiles, products,
+opportunities or applications; names and details can be changed in the app.
+
+--reset wipes ALL users and data (and uploaded files) first; it asks for
+confirmation unless --yes is given.
 """
 import io
+import sys
 from datetime import timedelta
 
 from django.conf import settings
@@ -17,6 +25,7 @@ from django.utils import timezone
 
 from core.models import (
     AccountStatus,
+    AdminAuditLog,
     AdminLevel,
     Application,
     Category,
@@ -88,34 +97,91 @@ def png(color):
     return buf.getvalue()
 
 
+ADMIN_EMAIL = "admin@ritelhub.local"
+ADMIN_PASSWORD = "admin12345"
+
+# Generic accounts for --users-only: (email, name, roles, extra fields)
+GENERIC_USERS = [
+    ("staff@ritelhub.local", "Staf Admin", [], {"is_admin": True, "admin_role": AdminLevel.STAFF}),
+    ("toko@ritelhub.local", "Pengguna Toko", ["store"], {}),
+    ("umkm@ritelhub.local", "Pengguna UMKM", ["umkm"], {}),
+    ("pengguna@ritelhub.local", "Pengguna Baru", [], {}),
+]
+
+
 class Command(BaseCommand):
-    help = "Seed demo data for local development."
+    help = "Seed testing data: full demo data (default) or generic accounts only (--users-only)."
 
     def add_arguments(self, parser):
-        parser.add_argument("--reset", action="store_true", help="Delete existing demo data first.")
+        parser.add_argument("--users-only", action="store_true", help="Only categories and generic accounts, no demo data.")
+        parser.add_argument("--reset", action="store_true", help="Delete ALL users and data (and uploaded files) first.")
+        parser.add_argument("--yes", action="store_true", help="Skip the --reset confirmation prompt.")
 
-    def handle(self, *args, reset=False, **opts):
-        if User.objects.filter(email="admin@ritelhub.local").exists() and not reset:
-            self.stdout.write(self.style.WARNING("Demo data already exists. Use --reset to recreate it."))
+    def handle(self, *args, users_only=False, reset=False, yes=False, **opts):
+        if User.objects.filter(email=ADMIN_EMAIL).exists() and not reset:
+            self.stdout.write(self.style.WARNING("Seed data already exists. Use --reset to wipe and recreate it."))
+            return
+        if reset and not yes and not self.confirm():
+            self.stdout.write("Aborted, nothing changed.")
             return
         emails_on = settings.NOTIFICATION_EMAILS
         settings.NOTIFICATION_EMAILS = False
         try:
             with transaction.atomic():
                 if reset:
-                    self.reset()
-                self.seed()
+                    files = self.reset()
+                self.seed_users_only() if users_only else self.seed()
         finally:
             settings.NOTIFICATION_EMAILS = emails_on
-        self.stdout.write(self.style.SUCCESS("Demo data ready. Admin: admin@ritelhub.local (password: admin12345)."))
+        if reset:
+            self.delete_files(files)
+        what = "Users-only data" if users_only else "Demo data"
+        self.stdout.write(self.style.SUCCESS(f"{what} ready. Admin: {ADMIN_EMAIL} (password: {ADMIN_PASSWORD})."))
+        if users_only:
+            for email, name, roles, _ in GENERIC_USERS:
+                self.stdout.write(f"  {email:<26} {name:<14} roles={roles or '-'}")
+
+    def confirm(self):
+        prompt = f"This deletes ALL {User.objects.count()} users and every profile, product, opportunity, application and uploaded file. Type 'yes' to continue: "
+        if not sys.stdin.isatty():
+            self.stderr.write("--reset needs confirmation; run interactively or add --yes.")
+            return False
+        return input(prompt).strip().lower() == "yes"
 
     def reset(self):
+        files = list(UploadedFile.objects.values_list("file", flat=True))
         Application.objects.all().delete()
         Opportunity.all_objects.all().delete()
         Product.all_objects.all().delete()
         UploadedFile.objects.all().delete()
+        AdminAuditLog.objects.all().delete()
         User.objects.all().delete()
         Category.objects.all().delete()
+        return files
+
+    def delete_files(self, names):
+        storage = UploadedFile._meta.get_field("file").storage
+        for name in names:
+            if name:
+                try:
+                    storage.delete(name)
+                except OSError:
+                    pass
+
+    def seed_categories(self):
+        from django.utils.text import slugify
+
+        cats = {}
+        for i, name in enumerate(CATEGORIES):
+            cats[name], _ = Category.objects.get_or_create(name=name, defaults={"slug": slugify(name.replace("&", "dan")), "sort_order": (i + 1) * 10})
+        Category.objects.get_or_create(name="Kerajinan", defaults={"slug": "kerajinan", "is_active": False, "sort_order": 80})
+        return cats
+
+    def seed_users_only(self):
+        self.seed_categories()
+        User.objects.create_superuser(ADMIN_EMAIL, ADMIN_PASSWORD, name="Admin")
+        for email, name, roles, extra in GENERIC_USERS:
+            User.objects.create(email=email, name=name, status=AccountStatus.ACTIVE, roles=roles, **extra)
 
     def user(self, email, name, **extra):
         u, _ = User.objects.get_or_create(email=email, defaults={"name": name, "status": AccountStatus.ACTIVE, **extra})
@@ -125,14 +191,8 @@ class Command(BaseCommand):
         return u
 
     def seed(self):
-        cats = {}
-        for i, name in enumerate(CATEGORIES):
-            from django.utils.text import slugify
-
-            cats[name], _ = Category.objects.get_or_create(name=name, defaults={"slug": slugify(name.replace("&", "dan")), "sort_order": (i + 1) * 10})
-        Category.objects.get_or_create(name="Kerajinan", defaults={"slug": "kerajinan", "is_active": False, "sort_order": 80})
-
-        admin = User.objects.create_superuser("admin@ritelhub.local", "admin12345", name="Aran Pratama")
+        cats = self.seed_categories()
+        admin = User.objects.create_superuser(ADMIN_EMAIL, ADMIN_PASSWORD, name="Aran Pratama")
         staff = self.user("nadia@ritelhub.local", "Nadia Putri", is_admin=True, admin_role=AdminLevel.STAFF)
         self.user("dewi.anggraini@contoh.id", "Dewi Anggraini", status=AccountStatus.INVITED, roles=["umkm"], invited_by=staff)
 

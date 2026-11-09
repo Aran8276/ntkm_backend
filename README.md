@@ -112,7 +112,19 @@ Panel admin di frontend membuka "Admin & akses" (A24) memakai `GET /users?is_adm
 
 ## 7. Data contoh
 
-`python manage.py seed_demo` (atau `--reset` untuk membuat ulang) membuat kategori, superadmin `admin@ritelhub.local` (kata sandi `admin12345` untuk Django admin), staff admin, 4 toko, 5 UMKM, produk berfoto, 7 peluang, dan pengajuan di semua status. Untuk mencoba API tanpa Google, set `DEBUG=True` dan `AUTH_DEV_LOGIN=True`, lalu:
+Dua mode seeder (jalankan di console container Portainer, atau `docker compose exec web ...`):
+
+```bash
+# Data demo lengkap (pengguna + profil, produk, peluang, pengajuan)
+python manage.py seed_demo --reset --yes
+
+# Hanya kategori + akun generik, tanpa data lain
+python manage.py seed_demo --users-only --reset --yes
+```
+
+`--reset` menghapus SEMUA pengguna, data, dan file unggahan terlebih dahulu (tanpa `--yes` akan diminta konfirmasi). Mode `--users-only` membuat superadmin `admin@ritelhub.local` (nama "Admin"), `staff@ritelhub.local` (staf admin), `toko@ritelhub.local` (peran store), `umkm@ritelhub.local` (peran umkm), dan `pengguna@ritelhub.local` (belum memilih peran); profil toko/UMKM diisi sendiri lewat aplikasi, dan nama bisa diubah.
+
+`python manage.py seed_demo` (mode lengkap) membuat kategori, superadmin `admin@ritelhub.local` (kata sandi `admin12345` untuk Django admin), staff admin, 4 toko, 5 UMKM, produk berfoto, 7 peluang, dan pengajuan di semua status. Untuk mencoba API tanpa Google, set `DEBUG=True` dan `AUTH_DEV_LOGIN=True`, lalu:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/auth/dev-login -H "Content-Type: application/json" -d '{"email":"agus.sanan@contoh.id"}'
