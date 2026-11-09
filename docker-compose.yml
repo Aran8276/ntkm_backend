@@ -1,25 +1,34 @@
 services:
   web:
     build: .
-    # Note: SQLite locks on concurrent writes. Using 1 worker with multiple threads
-    # prevents "database is locked" errors under production traffic.
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 4 --timeout 60
+    # SQLite locks on concurrent writes, so gunicorn runs 1 worker with threads
+    # (command is set in the Dockerfile).
     volumes:
-      # Mount the existing SQLite database file directly. 
-      # Important: Ensure db.sqlite3 exists locally before running docker compose up.
-      - ./db.sqlite3:/app/db.sqlite3
-      # Persist uploaded media files
-      - ./media:/app/media
+      # Named volumes, not bind mounts: Portainer clones the repo inside its own
+      # container, so ./db.sqlite3 does not exist on the host and Docker would
+      # create a directory there. The image ships db.sqlite3 as a seed that the
+      # entrypoint copies into the data volume on first start.
+      - ntkm_data:/app/data
+      - ntkm_media:/app/media
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
-      - DJANGO_SECRET_KEY=t49MYWOvZbYTeuuqctyLOnFRUTpF-7FNWnGM-K-r5O01rwslxS27FA2fMZivspOsKo8
-      - DJANGO_DEBUG=False
-      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,ntkm-website.vercel.app
+      - SECRET_KEY=t49MYWOvZbYTeuuqctyLOnFRUTpF-7FNWnGM-K-r5O01rwslxS27FA2fMZivspOsKo8
+      - DEBUG=False
+      # Add the server's public domain/IP here, or requests return 400.
+      - ALLOWED_HOSTS=localhost,127.0.0.1,ntkm-website.vercel.app
+      - FRONTEND_ORIGIN=https://ntkm-website.vercel.app
+      - FRONTEND_URL=https://ntkm-website.vercel.app
+      - SERVE_MEDIA=True
     ports:
       - "20001:8000"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/django-admin/login/')"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 20s
+
+volumes:
+  ntkm_data:
+  ntkm_media:

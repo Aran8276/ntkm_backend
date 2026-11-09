@@ -1,23 +1,30 @@
 FROM python:3.11-slim
 
-# Prevent Python from writing pyc files and buffering stdout/stderr
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# Install system dependencies required for Python packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
+# Install Python dependencies first (better layer caching)
 COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir gunicorn
+RUN pip install -r requirements.txt
 
-# Copy project files
+# Copy project files (db.sqlite3 included; see .dockerignore)
 COPY . /app/
 
-# Expose port
+# The committed db.sqlite3 becomes the seed. On first start the entrypoint copies it
+# into /app/data (a persistent volume) so data survives redeploys.
+RUN mkdir -p /app/seed /app/data /app/media \
+    && mv /app/db.sqlite3 /app/seed/db.sqlite3 \
+    && chmod +x /app/docker-entrypoint.sh \
+    && SECRET_KEY=build-only DEBUG=False python manage.py collectstatic --noinput
+
+ENV SQLITE_PATH=/app/data/db.sqlite3 \
+    MEDIA_ROOT=/app/media
+
 EXPOSE 8000
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "4", "--timeout", "60", "--access-logfile", "-"]
