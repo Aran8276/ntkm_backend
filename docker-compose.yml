@@ -12,9 +12,9 @@ services:
       - ./media:/app/media
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
-      - DJANGO_SECRET_KEY=your-super-secure-production-secret-key-change-this
+      - DJANGO_SECRET_KEY=t49MYWOvZbYTeuuqctyLOnFRUTpF-7FNWnGM-K-r5O01rwslxS27FA2fMZivspOsKo8
       - DJANGO_DEBUG=False
-      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,ntkm-website.vercel.app
     ports:
       - "20001:8000"
     restart: unless-stopped
