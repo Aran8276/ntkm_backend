@@ -1,0 +1,25 @@
+services:
+  web:
+    build: .
+    # Note: SQLite locks on concurrent writes. Using 1 worker with multiple threads
+    # prevents "database is locked" errors under production traffic.
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 4 --timeout 60
+    volumes:
+      # Mount the existing SQLite database file directly. 
+      # Important: Ensure db.sqlite3 exists locally before running docker compose up.
+      - ./db.sqlite3:/app/db.sqlite3
+      # Persist uploaded media files
+      - ./media:/app/media
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - DJANGO_SECRET_KEY=your-super-secure-production-secret-key-change-this
+      - DJANGO_DEBUG=False
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
