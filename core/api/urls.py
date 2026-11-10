@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import applications as apps
-from . import auth, me, notifications, opportunities as opps, products
+from . import auth, me, notifications, opportunities as opps, password, products
 
 
 def route(pattern, view, name):
@@ -12,9 +12,14 @@ def route(pattern, view, name):
 urlpatterns = [
     *route("auth/google", auth.GoogleLoginView.as_view(), "auth-google"),
     *route("auth/dev-login", auth.DevLoginView.as_view(), "auth-dev-login"),
+    *route("auth/register", password.RegisterView.as_view(), "auth-register"),
+    *route("auth/login", password.LoginView.as_view(), "auth-login"),
+    *route("auth/password/forgot", password.ForgotPasswordView.as_view(), "auth-password-forgot"),
+    *route("auth/password/reset", password.ResetPasswordView.as_view(), "auth-password-reset"),
     *route("auth/token/refresh", auth.RefreshView.as_view(), "auth-refresh"),
     *route("auth/logout", auth.LogoutView.as_view(), "auth-logout"),
     *route("me", me.MeView.as_view(), "me"),
+    *route("me/password", password.ChangePasswordView.as_view(), "me-password"),
     *route("me/roles", me.RolesView.as_view(), "me-roles"),
     *route("me/store-profile", me.StoreProfileView.as_view(), "me-store-profile"),
     *route("me/umkm-profile", me.UmkmProfileView.as_view(), "me-umkm-profile"),

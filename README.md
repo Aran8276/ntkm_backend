@@ -28,9 +28,16 @@ Dengan `DEBUG=False`, server menolak start bila `SECRET_KEY` belum diganti.
 | Endpoint | Isi |
 | --- | --- |
 | `POST /auth/google` `{id_token}` | Memverifikasi ID token Google → `{access, refresh, is_new_user, user}`. Akun undangan menjadi aktif saat login pertama. Akun disuspend → 403 `account_suspended`; akun dihapus → 403 |
+| `POST /auth/register` `{email, password, name?}` | Daftar dengan email + kata sandi → 201 `{access, refresh, is_new_user, user}`. Email yang sudah ada (termasuk akun Google/undangan) → 409 `email_taken` |
+| `POST /auth/login` `{email, password}` | Masuk dengan kata sandi → `{access, refresh, is_new_user, user}`. Salah email/sandi → 401 `invalid_credentials` (pesan sama untuk semua kasus) |
+| `POST /me/password` `{current_password?, new_password}` | Ganti kata sandi (butuh login). `current_password` wajib bila `user.has_password` bernilai true; akun Google bisa membuat kata sandi pertama tanpa itu. Sesi lain dikeluarkan; respons berisi token baru |
+| `POST /auth/password/forgot` `{email}` | Selalu 200. Bila akun ada, mengirim email berisi tautan `FRONTEND_URL` + `PASSWORD_RESET_PATH` + `?uid=…&token=…` (berlaku 60 menit, sekali pakai) |
+| `POST /auth/password/reset` `{uid, token, new_password}` | Menyimpan kata sandi baru dari tautan email → 200; tautan salah/kedaluwarsa → 400 `invalid_token` |
 | `POST /auth/token/refresh` `{refresh}` | Token baru (refresh diputar, yang lama di-blacklist). Akun disuspend/dihapus ditolak |
 | `POST /auth/logout` `{refresh}` | Blacklist refresh token → 204 |
 | `POST /auth/dev-login` `{email, name?}` | Login tanpa Google untuk mencoba API. Aktif bila `AUTH_DEV_LOGIN=True` dan (`DEBUG=True` atau `AUTH_DEV_LOGIN_ALLOW_PRODUCTION=True`). Siapa pun bisa masuk sebagai akun apa pun, jadi jangan aktifkan di produksi sungguhan |
+
+Kata sandi disimpan sebagai hash Argon2id dengan parameter RFC 9106 (m=64 MiB, t=3, p=4; lihat `core/hashers.py`). Aturan kata sandi: minimal 8 dan maksimal 128 karakter, tidak boleh hanya angka, bukan kata sandi umum, dan tidak mirip email/nama. Pendaftaran tidak memverifikasi email, jadi saat sebuah akun pertama kali ditautkan ke Google, kata sandi lamanya dihapus (pemilik bisa membuat yang baru di `POST /me/password`). Email atur ulang memakai `EMAIL_BACKEND`; secara default hanya dicetak ke log server, jadi isi pengaturan SMTP agar benar-benar terkirim.
 
 Kirim `Authorization: Bearer <access>` untuk endpoint lain. Setiap request mengecek ulang status akun, jadi suspend berlaku seketika (sesi refresh juga dicabut).
 
@@ -122,9 +129,11 @@ python manage.py seed_demo --reset --yes
 python manage.py seed_demo --users-only --reset --yes
 ```
 
+Semua akun hasil seeder (termasuk admin, juga untuk Django admin) memakai kata sandi `password123` untuk `POST /auth/login`; akun undangan pada data demo belum punya kata sandi. Kata sandi ini hanya untuk pengujian.
+
 `--reset` menghapus SEMUA pengguna, data, dan file unggahan terlebih dahulu (tanpa `--yes` akan diminta konfirmasi). Mode `--users-only` membuat superadmin `admin@ritelhub.local` (nama "Admin"), `staff@ritelhub.local` (staf admin), `toko@ritelhub.local` (peran store), `umkm@ritelhub.local` (peran umkm), dan `pengguna@ritelhub.local` (belum memilih peran); profil toko/UMKM diisi sendiri lewat aplikasi, dan nama bisa diubah.
 
-`python manage.py seed_demo` (mode lengkap) membuat kategori, superadmin `admin@ritelhub.local` (kata sandi `admin12345` untuk Django admin), staff admin, 4 toko, 5 UMKM, produk berfoto, 7 peluang, dan pengajuan di semua status. Untuk mencoba API tanpa Google, set `DEBUG=True` dan `AUTH_DEV_LOGIN=True`, lalu:
+`python manage.py seed_demo` (mode lengkap) membuat kategori, superadmin `admin@ritelhub.local`, staff admin, 4 toko, 5 UMKM, produk berfoto, 7 peluang, dan pengajuan di semua status. Untuk mencoba API tanpa Google, set `DEBUG=True` dan `AUTH_DEV_LOGIN=True`, lalu:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/auth/dev-login -H "Content-Type: application/json" -d '{"email":"agus.sanan@contoh.id"}'

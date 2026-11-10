@@ -12,7 +12,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from ..authentication import issue_tokens
+from ..authentication import issue_tokens, revoke_sessions
 from ..exceptions import AccountSuspended, ApiError, BadRequest, Forbidden
 from ..models import AccountStatus
 from ..presenters import me_out, unread_count
@@ -54,8 +54,15 @@ def sign_in(user_info):
             raise AccountSuspended()
         if user.google_sub and sub and user.google_sub != sub:
             raise ApiError("Identitas Google tidak cocok dengan akun ini.", code="unauthenticated", status_code=401)
+        revoke = False
         if sub and not user.google_sub:
             user.google_sub = sub
+            if not created and user.has_password:
+                # Registration does not verify the email, so a password on this account may
+                # have been set by someone else. Google has verified the owner: drop it (they
+                # can set a new one at /me/password) and sign out existing sessions.
+                user.set_unusable_password()
+                revoke = True
         if user.status == AccountStatus.INVITED:
             user.status = AccountStatus.ACTIVE  # first sign-in accepts the invitation
         if not user.name:
@@ -64,6 +71,8 @@ def sign_in(user_info):
             user.avatar_url = user_info["picture"]
         user.last_login = timezone.now()
         user.save()
+        if revoke:
+            revoke_sessions(user)
     return user, created
 
 

@@ -32,6 +32,14 @@ class PlatformTokenRefreshSerializer(TokenRefreshSerializer):
         return super().validate(attrs)
 
 
+def revoke_sessions(user):
+    """Blacklist every outstanding refresh token of ``user`` (password changed or reset)."""
+    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+
+    for token in OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True):
+        BlacklistedToken.objects.get_or_create(token=token)
+
+
 def issue_tokens(user):
     refresh = RefreshToken.for_user(user)
     return {"access": str(refresh.access_token), "refresh": str(refresh)}

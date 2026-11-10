@@ -285,6 +285,12 @@ class User(AbstractUser):
         return p if p is not None and p.deleted_at is None else None
 
     @property
+    def has_password(self):
+        # Accounts created without a password may hold an empty string, which Django's
+        # has_usable_password() reports as usable even though nothing can match it.
+        return bool(self.password) and self.has_usable_password()
+
+    @property
     def is_superadmin(self):
         return self.is_admin and self.admin_role == AdminLevel.SUPERADMIN
 

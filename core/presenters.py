@@ -91,6 +91,7 @@ def me_out(user, unread=0):
         "avatar_url": user.avatar_url or None,
         "roles": user.roles or [],
         "status": user.status,
+        "has_password": user.has_password,
         "onboarding": {"store_completed": store is not None, "umkm_completed": umkm is not None},
         "store_profile": {"id": str(store.id), "name": store.name} if store else None,
         "umkm_profile": {"id": str(umkm.id), "business_name": umkm.business_name} if umkm else None,

@@ -89,10 +89,24 @@ else:
     }
 
 AUTH_USER_MODEL = "core.User"
+# Passwords are hashed with Argon2id (see core/hashers.py for the parameters). PBKDF2 stays
+# listed only so hashes created before this change still verify; they are re-hashed with
+# Argon2id on the next successful login.
+PASSWORD_HASHERS = [
+    "core.hashers.Argon2idPasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+]
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+# Password reset links: valid for 1 hour, single use. The frontend page at
+# FRONTEND_URL + PASSWORD_RESET_PATH receives ?uid=...&token=... and posts them
+# with the new password to /api/v1/auth/password/reset.
+PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_MINUTES", 60)) * 60
+PASSWORD_RESET_PATH = os.getenv("PASSWORD_RESET_PATH", "/reset-password")
 LANGUAGE_CODE = "id"
 TIME_ZONE = "Asia/Jakarta"
 USE_I18N = True

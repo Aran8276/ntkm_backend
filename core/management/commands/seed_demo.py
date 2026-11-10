@@ -10,6 +10,9 @@ notifications are consistent).
 user, an UMKM user and a user without a role). No profiles, products,
 opportunities or applications; names and details can be changed in the app.
 
+Every seeded account gets the password "password123" (the invited demo
+account has none until it signs in).
+
 --reset wipes ALL users and data (and uploaded files) first; it asks for
 confirmation unless --yes is given.
 """
@@ -98,7 +101,9 @@ def png(color):
 
 
 ADMIN_EMAIL = "admin@ritelhub.local"
-ADMIN_PASSWORD = "admin12345"
+# Every seeded account (admin included) gets this password, for POST /auth/login and the
+# Django admin. Testing only: it is deliberately weak and skips the password validators.
+SEED_PASSWORD = "password123"
 
 # Generic accounts for --users-only: (email, name, roles, extra fields)
 GENERIC_USERS = [
@@ -136,7 +141,7 @@ class Command(BaseCommand):
         if reset:
             self.delete_files(files)
         what = "Users-only data" if users_only else "Demo data"
-        self.stdout.write(self.style.SUCCESS(f"{what} ready. Admin: {ADMIN_EMAIL} (password: {ADMIN_PASSWORD})."))
+        self.stdout.write(self.style.SUCCESS(f"{what} ready. Admin: {ADMIN_EMAIL}. Password for every seeded account: {SEED_PASSWORD}"))
         if users_only:
             for email, name, roles, _ in GENERIC_USERS:
                 self.stdout.write(f"  {email:<26} {name:<14} roles={roles or '-'}")
@@ -179,12 +184,18 @@ class Command(BaseCommand):
 
     def seed_users_only(self):
         self.seed_categories()
-        User.objects.create_superuser(ADMIN_EMAIL, ADMIN_PASSWORD, name="Admin")
+        User.objects.create_superuser(ADMIN_EMAIL, SEED_PASSWORD, name="Admin")
         for email, name, roles, extra in GENERIC_USERS:
-            User.objects.create(email=email, name=name, status=AccountStatus.ACTIVE, roles=roles, **extra)
+            User.objects.create_user(email=email, password=SEED_PASSWORD, name=name, status=AccountStatus.ACTIVE, roles=roles, **extra)
 
     def user(self, email, name, **extra):
-        u, _ = User.objects.get_or_create(email=email, defaults={"name": name, "status": AccountStatus.ACTIVE, **extra})
+        u, created = User.objects.get_or_create(email=email, defaults={"name": name, "status": AccountStatus.ACTIVE, **extra})
+        if created:
+            if u.status == AccountStatus.INVITED:  # invited accounts have not signed in yet
+                u.set_unusable_password()
+            else:
+                u.set_password(SEED_PASSWORD)
+            u.save(update_fields=["password"])
         if not u.last_login:
             u.last_login = timezone.now() - timedelta(hours=3)
             u.save(update_fields=["last_login"])
@@ -192,7 +203,7 @@ class Command(BaseCommand):
 
     def seed(self):
         cats = self.seed_categories()
-        admin = User.objects.create_superuser(ADMIN_EMAIL, ADMIN_PASSWORD, name="Aran Pratama")
+        admin = User.objects.create_superuser(ADMIN_EMAIL, SEED_PASSWORD, name="Aran Pratama")
         staff = self.user("nadia@ritelhub.local", "Nadia Putri", is_admin=True, admin_role=AdminLevel.STAFF)
         self.user("dewi.anggraini@contoh.id", "Dewi Anggraini", status=AccountStatus.INVITED, roles=["umkm"], invited_by=staff)
 
